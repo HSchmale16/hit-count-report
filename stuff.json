@@ -1,0 +1,347 @@
+{
+    "Items": [
+        {
+            "the_url": {
+                "S": "/"
+            },
+            "last_hit_at": {
+                "S": "2022-10-10T16:27:44.063341"
+            },
+            "as_of_when": {
+                "S": "2022-10-10"
+            },
+            "accumulated_count": {
+                "N": "1055"
+            },
+            "today_count": {
+                "N": "2"
+            }
+        },
+        {
+            "the_url": {
+                "S": "/2019/01/25/antergos.html"
+            },
+            "last_hit_at": {
+                "S": "2022-10-10T03:54:59.011790"
+            },
+            "as_of_when": {
+                "S": "2022-10-10"
+            },
+            "accumulated_count": {
+                "N": "33"
+            },
+            "today_count": {
+                "N": "1"
+            }
+        },
+        {
+            "the_url": {
+                "S": "/2019/04/30/incr-semver.html"
+            },
+            "last_hit_at": {
+                "S": "2022-10-10T17:20:10.034834"
+            },
+            "as_of_when": {
+                "S": "2022-10-10"
+            },
+            "accumulated_count": {
+                "N": "617"
+            },
+            "today_count": {
+                "N": "3"
+            }
+        },
+        {
+            "the_url": {
+                "S": "/2020/07/23/docker-runtime-stats-collection.html"
+            },
+            "last_hit_at": {
+                "S": "2022-10-10T00:31:22.503435"
+            },
+            "as_of_when": {
+                "S": "2022-10-10"
+            },
+            "accumulated_count": {
+                "N": "44"
+            },
+            "today_count": {
+                "N": "1"
+            }
+        },
+        {
+            "the_url": {
+                "S": "/2021/01/07/pygame-linein-audio-viz.html"
+            },
+            "last_hit_at": {
+                "S": "2022-10-10T11:57:15.068672"
+            },
+            "as_of_when": {
+                "S": "2022-10-10"
+            },
+            "accumulated_count": {
+                "N": "655"
+            },
+            "today_count": {
+                "N": "1"
+            }
+        },
+        {
+            "the_url": {
+                "S": "/2021/01/21/pylint-github-actions.html"
+            },
+            "last_hit_at": {
+                "S": "2022-10-10T16:52:01.219841"
+            },
+            "as_of_when": {
+                "S": "2022-10-10"
+            },
+            "accumulated_count": {
+                "N": "2485"
+            },
+            "today_count": {
+                "N": "3"
+            }
+        },
+        {
+            "the_url": {
+                "S": "/2021/03/30/aws-dynamo-faker.html"
+            },
+            "last_hit_at": {
+                "S": "2022-10-10T11:55:08.247108"
+            },
+            "as_of_when": {
+                "S": "2022-10-10"
+            },
+            "accumulated_count": {
+                "N": "464"
+            },
+            "today_count": {
+                "N": "1"
+            }
+        },
+        {
+            "the_url": {
+                "S": "/2021/07/09/blog-search.html"
+            },
+            "last_hit_at": {
+                "S": "2022-10-10T13:33:30.411991"
+            },
+            "as_of_when": {
+                "S": "2022-10-10"
+            },
+            "accumulated_count": {
+                "N": "403"
+            },
+            "today_count": {
+                "N": "1"
+            }
+        },
+        {
+            "the_url": {
+                "S": "/2021/11/15/progprac.html"
+            },
+            "last_hit_at": {
+                "S": "2022-10-10T04:25:53.453768"
+            },
+            "as_of_when": {
+                "S": "2022-10-10"
+            },
+            "accumulated_count": {
+                "N": "94"
+            },
+            "today_count": {
+                "N": "1"
+            }
+        },
+        {
+            "the_url": {
+                "S": "/2022/01/27/new-laptop-setup.html"
+            },
+            "last_hit_at": {
+                "S": "2022-10-10T09:22:19.163322"
+            },
+            "as_of_when": {
+                "S": "2022-10-10"
+            },
+            "accumulated_count": {
+                "N": "67"
+            },
+            "today_count": {
+                "N": "1"
+            }
+        },
+        {
+            "the_url": {
+                "S": "/2022/02/01/athena-view-update.html"
+            },
+            "last_hit_at": {
+                "S": "2022-10-10T16:01:04.316487"
+            },
+            "as_of_when": {
+                "S": "2022-10-10"
+            },
+            "accumulated_count": {
+                "N": "321"
+            },
+            "today_count": {
+                "N": "2"
+            }
+        },
+        {
+            "the_url": {
+                "S": "/2022/02/22/povray-dice.html"
+            },
+            "last_hit_at": {
+                "S": "2022-10-10T08:34:27.820116"
+            },
+            "as_of_when": {
+                "S": "2022-10-10"
+            },
+            "accumulated_count": {
+                "N": "78"
+            },
+            "today_count": {
+                "N": "1"
+            }
+        },
+        {
+            "the_url": {
+                "S": "/2022/03/14/rsa.html"
+            },
+            "last_hit_at": {
+                "S": "2022-10-10T14:29:48.153956"
+            },
+            "as_of_when": {
+                "S": "2022-10-10"
+            },
+            "accumulated_count": {
+                "N": "1997"
+            },
+            "today_count": {
+                "N": "2"
+            }
+        },
+        {
+            "the_url": {
+                "S": "/2022/08/11/usda-nutrition.html"
+            },
+            "last_hit_at": {
+                "S": "2022-10-10T09:37:06.493465"
+            },
+            "as_of_when": {
+                "S": "2022-10-10"
+            },
+            "accumulated_count": {
+                "N": "32"
+            },
+            "today_count": {
+                "N": "1"
+            }
+        },
+        {
+            "the_url": {
+                "S": "/about/"
+            },
+            "last_hit_at": {
+                "S": "2022-10-10T14:46:24.065902"
+            },
+            "as_of_when": {
+                "S": "2022-10-10"
+            },
+            "accumulated_count": {
+                "N": "246"
+            },
+            "today_count": {
+                "N": "4"
+            }
+        },
+        {
+            "the_url": {
+                "S": "/page2/"
+            },
+            "last_hit_at": {
+                "S": "2022-10-10T08:10:23.530448"
+            },
+            "as_of_when": {
+                "S": "2022-10-10"
+            },
+            "accumulated_count": {
+                "N": "61"
+            },
+            "today_count": {
+                "N": "1"
+            }
+        },
+        {
+            "the_url": {
+                "S": "/projects/"
+            },
+            "last_hit_at": {
+                "S": "2022-10-10T14:28:16.557034"
+            },
+            "as_of_when": {
+                "S": "2022-10-10"
+            },
+            "accumulated_count": {
+                "N": "224"
+            },
+            "today_count": {
+                "N": "1"
+            }
+        },
+        {
+            "the_url": {
+                "S": "/search/"
+            },
+            "last_hit_at": {
+                "S": "2022-10-10T14:29:42.050513"
+            },
+            "as_of_when": {
+                "S": "2022-10-10"
+            },
+            "accumulated_count": {
+                "N": "85"
+            },
+            "today_count": {
+                "N": "1"
+            }
+        },
+        {
+            "the_url": {
+                "S": "/tag/"
+            },
+            "last_hit_at": {
+                "S": "2022-10-10T16:27:46.462108"
+            },
+            "as_of_when": {
+                "S": "2022-10-10"
+            },
+            "accumulated_count": {
+                "N": "66"
+            },
+            "today_count": {
+                "N": "1"
+            }
+        },
+        {
+            "the_url": {
+                "S": "/tag/advent-of-code/"
+            },
+            "last_hit_at": {
+                "S": "2022-10-10T11:44:43.569262"
+            },
+            "as_of_when": {
+                "S": "2022-10-10"
+            },
+            "accumulated_count": {
+                "N": "9"
+            },
+            "today_count": {
+                "N": "1"
+            }
+        }
+    ],
+    "Count": 20,
+    "ScannedCount": 20,
+    "ConsumedCapacity": null
+}
