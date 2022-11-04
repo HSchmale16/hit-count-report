@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -33,6 +34,7 @@ type NumberItem struct {
 
 type HitCountItem struct {
 	TodayCount NumberItem `json:"today_count"`
+	AccumCount NumberItem `json:"accumulated_count"`
 	AsOfWhen   StringItem
 	Url        StringItem `json:"the_url"`
 	LastHit    StringItem `json:"last_hit_at"`
@@ -51,6 +53,7 @@ func int10(s string) int64 {
 func printReport(items []HitCountItem) {
 	sum := 0
 	uncounted := 0
+	distinctUncounts := 0
 
 	sort.Slice(items, func(i, j int) bool {
 		return int10(items[i].TodayCount.N) > int10(items[j].TodayCount.N)
@@ -60,17 +63,19 @@ func printReport(items []HitCountItem) {
 		if !strings.HasSuffix(items[index].Url.S, ".html") {
 			num := int10(items[index].TodayCount.N)
 			uncounted += int(num)
+			distinctUncounts++;
 			continue
 		}
 
 		num := int10(items[index].TodayCount.N)
 		sum += int(num)
 
-		fmt.Printf("%50s %10s %4d %5d\n",
-			items[index].Url.S, items[index].LastHit.S[11:], num, sum)
+		fmt.Printf("%45s %10s %4d %5d %5d\n",
+			items[index].Url.S, items[index].LastHit.S[11:], num, sum,
+			int10(items[index].AccumCount.N))
 	}
 
-	fmt.Printf("Non post hits = %d\n", uncounted)
+	fmt.Printf("Non post hits (Distinct/Total)= %d/%d\n", distinctUncounts, uncounted)
 }
 
 func computeDeltas(items *[]HitCountItem, oldItems []HitCountItem) {
@@ -99,35 +104,53 @@ func generateDates() chan string {
 	return channel
 }
 
-func mainDatePicker() {
-
+func parallelScan() {
 	s := session.New(&aws.Config{
 		Region: aws.String("us-east-1"),
 	})
 	svc := dynamodb.New(s)
+
+	totalCap := 0
+
+	ctx := context.Background()
+
 	var wg sync.WaitGroup
+	totalWorkers := int64(7)
 
-	datesChan := generateDates()
-
-	dataMap := make(map[string][]HitCountItem)
-
-	for date := range datesChan {
+	for i := int64(0); i < totalWorkers; i++ {
 		wg.Add(1)
+		go func(i, total int64) {
+			err := svc.ScanPagesWithContext(ctx,
+				&dynamodb.ScanInput{
+					TableName: aws.String("hit_counts"),
+					//IndexName:              aws.String("as_of_when-the_url-index-2"),
+					ReturnConsumedCapacity: aws.String("TOTAL"),
+					Segment:                aws.Int64(i),
+					TotalSegments:          aws.Int64(total),
+					//Limit:                  aws.Int64(256),
+				},
+				func(page *dynamodb.ScanOutput, lastpage bool) bool {
+					//fmt.Println(page)
 
-		go func(d string) {
-			var list []HitCountItem
+					totalCap += int(*page.ConsumedCapacity.CapacityUnits)
 
-			makeRequest2(svc, d, &list)
-			dataMap[d] = list
+					if lastpage {
+						fmt.Println(totalCap)
+					}
+
+					return true
+				},
+			)
+
+			if err != nil {
+				log.Fatal(err)
+			}
 
 			wg.Done()
-		}(date)
-
+		}(i, int64(totalWorkers))
 	}
+
 	wg.Wait()
-
-	fmt.Println(dataMap)
-
 }
 
 func main() {
@@ -154,7 +177,7 @@ func main() {
 	computeDeltas(&items, old_items)
 
 	printReport(items)
-	//printReport(old_items)
+	printReport(old_items)
 }
 
 func loadDynamodbFile(items *[]HitCountItem, ch chan bool) {
@@ -287,6 +310,9 @@ func makeRequest(svc *dynamodb.DynamoDB, whenAt string, items *[]HitCountItem, c
 			},
 			LastHit: StringItem{
 				S: *item["last_hit_at"].S,
+			},
+			AccumCount: NumberItem{
+				N: *item["accumulated_count"].N,
 			},
 		}
 
