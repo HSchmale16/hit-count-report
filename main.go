@@ -63,7 +63,7 @@ func printReport(items []HitCountItem) {
 		if !strings.HasSuffix(items[index].Url.S, ".html") {
 			num := int10(items[index].TodayCount.N)
 			uncounted += int(num)
-			distinctUncounts++;
+			distinctUncounts++
 			continue
 		}
 
@@ -157,7 +157,7 @@ func main() {
 	now := time.Now().UTC()
 	nowStr := now.Format(YYYYMMDD)
 
-	yesterdayStr := "2022-09-20"
+	yesterdayStr := now.AddDate(0, 0, -1).Format(YYYYMMDD)
 
 	s := session.New(&aws.Config{
 		Region: aws.String("us-east-1"),
@@ -197,66 +197,6 @@ func loadDynamodbFile(items *[]HitCountItem, ch chan bool) {
 	fmt.Println("LOADED")
 	ch <- true
 	fmt.Println("Posted back")
-}
-
-func makeRequest2(svc *dynamodb.DynamoDB, whenAt string, items *[]HitCountItem) {
-
-	input := &dynamodb.QueryInput{
-		ExpressionAttributeValues: map[string]*dynamodb.AttributeValue{
-			":v1": {
-				S: aws.String(whenAt),
-			},
-		},
-		KeyConditionExpression: aws.String("as_of_when = :v1"),
-		TableName:              aws.String("hit_counts"),
-		IndexName:              aws.String("as_of_when-the_url-index-2"),
-	}
-
-	result, err := svc.Query(input)
-	if err != nil {
-		if aerr, ok := err.(awserr.Error); ok {
-			switch aerr.Code() {
-			case dynamodb.ErrCodeProvisionedThroughputExceededException:
-				fmt.Println(dynamodb.ErrCodeProvisionedThroughputExceededException, aerr.Error())
-			case dynamodb.ErrCodeResourceNotFoundException:
-				fmt.Println(dynamodb.ErrCodeResourceNotFoundException, aerr.Error())
-			case dynamodb.ErrCodeRequestLimitExceeded:
-				fmt.Println(dynamodb.ErrCodeRequestLimitExceeded, aerr.Error())
-			case dynamodb.ErrCodeInternalServerError:
-				fmt.Println(dynamodb.ErrCodeInternalServerError, aerr.Error())
-			default:
-				fmt.Println(aerr.Error())
-			}
-		} else {
-			// Print the error, cast err to awserr.Error to get the Code and
-			// Message from an error.
-			fmt.Println(err.Error())
-		}
-		return // make([]HitCountItem, 0)
-	}
-
-	//items := make([]HitCountItem, *result.Count)
-	for index := range result.Items {
-		item := result.Items[index]
-		thing := HitCountItem{
-			AsOfWhen: StringItem{
-				S: *item["as_of_when"].S,
-			},
-			Url: StringItem{
-				S: *item["the_url"].S,
-			},
-			TodayCount: NumberItem{
-				N: *item["today_count"].N,
-			},
-			LastHit: StringItem{
-				S: *item["last_hit_at"].S,
-			},
-		}
-
-		*items = append(*items, thing)
-	}
-
-	return // items
 }
 
 func makeRequest(svc *dynamodb.DynamoDB, whenAt string, items *[]HitCountItem, ch chan bool) {
