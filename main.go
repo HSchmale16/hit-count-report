@@ -56,7 +56,13 @@ func printReport(items []HitCountItem) {
 	distinctUncounts := 0
 
 	sort.Slice(items, func(i, j int) bool {
-		return int10(items[i].TodayCount.N) > int10(items[j].TodayCount.N)
+		a := int10(items[i].TodayCount.N)
+		b := int10(items[j].TodayCount.N)
+
+		if a != b {
+			return a > b
+		}
+		return items[i].AsOfWhen.S > items[j].AsOfWhen.S
 	})
 
 	for index := range items {
@@ -67,11 +73,14 @@ func printReport(items []HitCountItem) {
 			continue
 		}
 
+		url := items[index].Url.S
+		url = url[:len(url)-5]
+
 		num := int10(items[index].TodayCount.N)
 		sum += int(num)
 
 		fmt.Printf("%45s %10s %4d %5d %5d\n",
-			items[index].Url.S, items[index].LastHit.S[11:], num, sum,
+			url, items[index].LastHit.S[11:19], num, sum,
 			int10(items[index].AccumCount.N))
 	}
 
@@ -177,7 +186,7 @@ func main() {
 	computeDeltas(&items, old_items)
 
 	printReport(items)
-	printReport(old_items)
+	//printReport(old_items)
 }
 
 func loadDynamodbFile(items *[]HitCountItem, ch chan bool) {
