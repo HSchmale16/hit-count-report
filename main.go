@@ -64,27 +64,30 @@ func printReport(items []HitCountItem) {
 		}
 		return items[i].AsOfWhen.S > items[j].AsOfWhen.S
 	})
+	fmt.Printf("%45s %10s %4s %5s %5s\n",
+		"Post", "Last Hit", "Hits", "Accum", "Total")
 
 	for index := range items {
-		if !strings.HasSuffix(items[index].Url.S, ".html") {
+		url := items[index].Url.S
+		if strings.HasSuffix(url, ".html") && strings.HasPrefix(url, "/20") {
+			url = url[1 : len(url)-5]
+
+			num := int10(items[index].TodayCount.N)
+			sum += int(num)
+
+			fmt.Printf("%45s %10s %4d %5d %5d\n",
+				url, items[index].LastHit.S[11:19], num, sum,
+				int10(items[index].AccumCount.N))
+		} else {
 			num := int10(items[index].TodayCount.N)
 			uncounted += int(num)
 			distinctUncounts++
 			continue
 		}
-
-		url := items[index].Url.S
-		url = url[:len(url)-5]
-
-		num := int10(items[index].TodayCount.N)
-		sum += int(num)
-
-		fmt.Printf("%45s %10s %4d %5d %5d\n",
-			url, items[index].LastHit.S[11:19], num, sum,
-			int10(items[index].AccumCount.N))
 	}
 
 	fmt.Printf("Non post hits (Distinct/Total)= %d/%d\n", distinctUncounts, uncounted)
+	fmt.Printf("Actual Total Hits: %d\n", uncounted+sum)
 }
 
 func computeDeltas(items *[]HitCountItem, oldItems []HitCountItem) {
@@ -162,6 +165,14 @@ func parallelScan() {
 	wg.Wait()
 }
 
+func sum(x []HitCountItem) int64 {
+	y := int64(0)
+	for i := range x {
+		y += int10(x[i].TodayCount.N)
+	}
+	return y
+}
+
 func main() {
 	now := time.Now().UTC()
 	nowStr := now.Format(YYYYMMDD)
@@ -186,6 +197,7 @@ func main() {
 	computeDeltas(&items, old_items)
 
 	printReport(items)
+	fmt.Printf("Yesterday total = %d\n", sum(old_items))
 	//printReport(old_items)
 }
 
