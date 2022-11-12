@@ -85,9 +85,6 @@ func printReport(items []HitCountItem) {
 			continue
 		}
 	}
-
-	fmt.Printf("Non post hits (Distinct/Total)= %d/%d\n", distinctUncounts, uncounted)
-	fmt.Printf("Actual Total Hits: %d\n", uncounted+sum)
 }
 
 func computeDeltas(items *[]HitCountItem, oldItems []HitCountItem) {
@@ -165,12 +162,36 @@ func parallelScan() {
 	wg.Wait()
 }
 
-func sum(x []HitCountItem) int64 {
-	y := int64(0)
-	for i := range x {
-		y += int10(x[i].TodayCount.N)
+
+type SummaryStats struct {
+	DistinctPosts int64
+	PostHits      int64
+	NotPosts      int64
+	NotPostViews  int64
+	TotalViews    int64
+}
+
+func computeSummaryStats(items []HitCountItem) SummaryStats {
+	var stats SummaryStats
+
+	for index, value := range items {
+		url := items[index].Url.S
+
+		if strings.HasSuffix(url, ".html") && strings.HasPrefix(url, "/20") {
+			stats.PostHits += int10(value.TodayCount.N)
+			stats.DistinctPosts += 1
+		} else if strings.HasSuffix(url, "-dev") {
+			// skip dev mode stuff
+			continue
+		}else {
+			stats.NotPostViews += int10(value.TodayCount.N)
+			stats.NotPosts += 1
+		}
+
+		stats.TotalViews += int10(value.TodayCount.N)
 	}
-	return y
+
+	return stats
 }
 
 func main() {
@@ -197,8 +218,18 @@ func main() {
 	computeDeltas(&items, old_items)
 
 	printReport(items)
-	fmt.Printf("Yesterday total = %d\n", sum(old_items))
-	//printReport(old_items)
+	stats := computeSummaryStats(items)
+
+	fmt.Printf("Posts(Views/Distinct): %d / %d + Other(Views/Distinct): %d / %d  = %d \n",
+		stats.PostHits, stats.DistinctPosts,
+		stats.NotPostViews, stats.NotPosts,
+		stats.TotalViews)
+
+	stats = computeSummaryStats(old_items)
+	fmt.Printf("Yesterday Posts(Views/Distinct): %d / %d + Other(Views/Distinct): %d / %d  = %d \n",
+		stats.PostHits, stats.DistinctPosts,
+		stats.NotPostViews, stats.NotPosts,
+		stats.TotalViews)
 }
 
 func loadDynamodbFile(items *[]HitCountItem, ch chan bool) {
