@@ -162,7 +162,6 @@ func parallelScan() {
 	wg.Wait()
 }
 
-
 type SummaryStats struct {
 	DistinctPosts int64
 	PostHits      int64
@@ -183,7 +182,7 @@ func computeSummaryStats(items []HitCountItem) SummaryStats {
 		} else if strings.HasSuffix(url, "-dev") {
 			// skip dev mode stuff
 			continue
-		}else {
+		} else {
 			stats.NotPostViews += int10(value.TodayCount.N)
 			stats.NotPosts += 1
 		}
@@ -195,6 +194,15 @@ func computeSummaryStats(items []HitCountItem) SummaryStats {
 }
 
 func main() {
+	/*
+		pprofFile, pprofErr := os.Create("cpu.pprof")
+		if pprofErr != nil {
+			log.Fatal(pprofErr)
+		}
+		pprof.StartCPUProfile(pprofFile)
+		defer pprof.StopCPUProfile()
+	*/
+
 	now := time.Now().UTC()
 	nowStr := now.Format(YYYYMMDD)
 
