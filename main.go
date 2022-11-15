@@ -64,7 +64,7 @@ func printReport(items []HitCountItem) {
 		}
 		return items[i].AsOfWhen.S > items[j].AsOfWhen.S
 	})
-	fmt.Printf("%45s %10s %4s %5s %5s\n",
+	fmt.Printf("%45s\t%10s\t%4s\t%5s\t%5s\n",
 		"Post", "Last Hit", "Hits", "Accum", "Total")
 
 	for index := range items {
@@ -75,7 +75,7 @@ func printReport(items []HitCountItem) {
 			num := int10(items[index].TodayCount.N)
 			sum += int(num)
 
-			fmt.Printf("%45s %10s %4d %5d %5d\n",
+			fmt.Printf("%45s\t%10s\t%4d\t%5d\t%5d\n",
 				url, items[index].LastHit.S[11:19], num, sum,
 				int10(items[index].AccumCount.N))
 		} else {
@@ -205,7 +205,6 @@ func main() {
 
 	now := time.Now().UTC()
 	nowStr := now.Format(YYYYMMDD)
-
 	yesterdayStr := now.AddDate(0, 0, -1).Format(YYYYMMDD)
 
 	s := session.New(&aws.Config{
