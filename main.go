@@ -245,10 +245,12 @@ func main() {
 
 			yesterdayStr := now.AddDate(0, 0, -daysAgo).Format(YYYYMMDD)
 
-			go makeRequest(svc, yesterdayStr, &old_items, ch)
-			<-ch
+			var ch2 = make(chan bool)
+			go makeRequest(svc, yesterdayStr, &old_items, ch2)
+			<-ch2
+			close(ch2)
 
-			//printReport(old_items)
+			// printReport(old_items)
 			stats := computeSummaryStats(old_items)
 
 			fmt.Printf("%s Posts(Views/Distinct): %3d / %3d + Other(Views/Distinct): %3d / %3d  = %4d \n",
