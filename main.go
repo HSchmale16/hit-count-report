@@ -62,7 +62,7 @@ func printReport(items []HitCountItem) {
 		if a != b {
 			return a > b
 		}
-		return items[i].AsOfWhen.S > items[j].AsOfWhen.S
+		return items[i].AsOfWhen.S < items[j].AsOfWhen.S
 	})
 	fmt.Printf("%45s\t%10s\t%4s\t%5s\t%5s\n",
 		"Post", "Last Hit", "Hits", "Accum", "Total")
@@ -171,7 +171,7 @@ type SummaryStats struct {
 }
 
 func computeSummaryStats(items []HitCountItem) SummaryStats {
-	var stats SummaryStats
+	stats := SummaryStats{}
 
 	for index, value := range items {
 		url := items[index].Url.S
@@ -205,7 +205,6 @@ func main() {
 
 	now := time.Now().UTC()
 	nowStr := now.Format(YYYYMMDD)
-	yesterdayStr := now.AddDate(0, 0, -1).Format(YYYYMMDD)
 
 	s := session.New(&aws.Config{
 		Region: aws.String("us-east-1"),
@@ -213,30 +212,55 @@ func main() {
 	svc := dynamodb.New(s)
 
 	ch := make(chan bool)
-	var old_items []HitCountItem
-	var items []HitCountItem
-	go makeRequest(svc, nowStr, &items, ch)
-	//go loadDynamodbFile(&old_items, ch)
-	go makeRequest(svc, yesterdayStr, &old_items, ch)
 
-	<-ch
-	<-ch
+	var wg sync.WaitGroup
 
-	computeDeltas(&items, old_items)
+	wg.Add(1)
+	go func() {
+		var items []HitCountItem
+		go makeRequest(svc, nowStr, &items, ch)
+		<-ch
 
-	printReport(items)
-	stats := computeSummaryStats(items)
+		printReport(items)
+		stats := computeSummaryStats(items)
 
-	fmt.Printf("Posts(Views/Distinct): %d / %d + Other(Views/Distinct): %d / %d  = %d \n",
-		stats.PostHits, stats.DistinctPosts,
-		stats.NotPostViews, stats.NotPosts,
-		stats.TotalViews)
+		fmt.Printf("%s Posts(Views/Distinct): %3d / %3d + Other(Views/Distinct): %3d / %3d  = %4d \n",
+			nowStr,
+			stats.PostHits, stats.DistinctPosts,
+			stats.NotPostViews, stats.NotPosts,
+			stats.TotalViews)
 
-	stats = computeSummaryStats(old_items)
-	fmt.Printf("Yesterday Posts(Views/Distinct): %d / %d + Other(Views/Distinct): %d / %d  = %d \n",
-		stats.PostHits, stats.DistinctPosts,
-		stats.NotPostViews, stats.NotPosts,
-		stats.TotalViews)
+		wg.Done()
+	}()
+
+	wg.Wait()
+
+	N := 3
+
+	for i := 1; i <= N; i++ {
+		wg.Add(1)
+		go func(daysAgo int) {
+			defer wg.Done()
+			var old_items []HitCountItem
+
+			yesterdayStr := now.AddDate(0, 0, -daysAgo).Format(YYYYMMDD)
+
+			go makeRequest(svc, yesterdayStr, &old_items, ch)
+			<-ch
+
+			//printReport(old_items)
+			stats := computeSummaryStats(old_items)
+
+			fmt.Printf("%s Posts(Views/Distinct): %3d / %3d + Other(Views/Distinct): %3d / %3d  = %4d \n",
+				yesterdayStr,
+				stats.PostHits, stats.DistinctPosts,
+				stats.NotPostViews, stats.NotPosts,
+				stats.TotalViews)
+		}(i)
+	}
+
+	wg.Wait()
+
 }
 
 func loadDynamodbFile(items *[]HitCountItem, ch chan bool) {
