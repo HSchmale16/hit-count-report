@@ -4,10 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"io/ioutil"
 	"log"
-	"os"
 	"sort"
 	"strconv"
 	"strings"
@@ -83,17 +81,6 @@ func printReport(items []HitCountItem) {
 			uncounted += int(num)
 			distinctUncounts++
 			continue
-		}
-	}
-}
-
-func computeDeltas(items *[]HitCountItem, oldItems []HitCountItem) {
-	for cIndex, cValue := range *items {
-
-		for oIndex, oValue := range oldItems {
-			if oValue.Url == cValue.Url {
-				(*items)[cIndex].Delta = cIndex - oIndex
-			}
 		}
 	}
 }
@@ -193,6 +180,34 @@ func computeSummaryStats(items []HitCountItem) SummaryStats {
 	return stats
 }
 
+type futureStatsString chan string
+
+func getStatsString(AsOfWhen string, svc *dynamodb.DynamoDB) futureStatsString {
+	ch := make(chan string)
+
+	go func() {
+		var old_items []HitCountItem
+
+		ch2 := make(chan bool)
+		go makeRequest(svc, AsOfWhen, &old_items, ch2)
+		<-ch2
+		close(ch2)
+
+		// printReport(old_items)
+		stats := computeSummaryStats(old_items)
+
+		retStr := fmt.Sprintf("%s Posts(Views/Distinct): %3d / %3d + Other(Views/Distinct): %3d / %3d  = %4d \n",
+			AsOfWhen,
+			stats.PostHits, stats.DistinctPosts,
+			stats.NotPostViews, stats.NotPosts,
+			stats.TotalViews)
+
+		ch <- retStr
+	}()
+
+	return ch
+}
+
 func main() {
 	/*
 		pprofFile, pprofErr := os.Create("cpu.pprof")
@@ -212,56 +227,27 @@ func main() {
 	svc := dynamodb.New(s)
 
 	ch := make(chan bool)
+	var items []HitCountItem
+	go makeRequest(svc, nowStr, &items, ch)
 
-	var wg sync.WaitGroup
+	var futures []futureStatsString
 
-	wg.Add(1)
-	go func() {
-		var items []HitCountItem
-		go makeRequest(svc, nowStr, &items, ch)
-		<-ch
-
-		printReport(items)
-		stats := computeSummaryStats(items)
-
-		fmt.Printf("%s Posts(Views/Distinct): %3d / %3d + Other(Views/Distinct): %3d / %3d  = %4d \n",
-			nowStr,
-			stats.PostHits, stats.DistinctPosts,
-			stats.NotPostViews, stats.NotPosts,
-			stats.TotalViews)
-
-		wg.Done()
-	}()
-
-	wg.Wait()
+	futures = append(futures, getStatsString(nowStr, svc))
 
 	N := 3
 
 	for i := 1; i <= N; i++ {
-		wg.Add(1)
-		go func(daysAgo int) {
-			defer wg.Done()
-			var old_items []HitCountItem
-
-			yesterdayStr := now.AddDate(0, 0, -daysAgo).Format(YYYYMMDD)
-
-			var ch2 = make(chan bool)
-			go makeRequest(svc, yesterdayStr, &old_items, ch2)
-			<-ch2
-			close(ch2)
-
-			// printReport(old_items)
-			stats := computeSummaryStats(old_items)
-
-			fmt.Printf("%s Posts(Views/Distinct): %3d / %3d + Other(Views/Distinct): %3d / %3d  = %4d \n",
-				yesterdayStr,
-				stats.PostHits, stats.DistinctPosts,
-				stats.NotPostViews, stats.NotPosts,
-				stats.TotalViews)
-		}(i)
+		yesterdayStr := now.AddDate(0, 0, -i).Format(YYYYMMDD)
+		futures = append(futures, getStatsString(yesterdayStr, svc))
 	}
 
-	wg.Wait()
+	// Print the actual report
+	<-ch
+	printReport(items)
+	for _, item := range futures {
+		s := <-item
+		fmt.Print(s)
+	}
 
 }
 
@@ -320,7 +306,6 @@ func makeRequest(svc *dynamodb.DynamoDB, whenAt string, items *[]HitCountItem, c
 		return // make([]HitCountItem, 0)
 	}
 
-	//items := make([]HitCountItem, *result.Count)
 	for index := range result.Items {
 		item := result.Items[index]
 		thing := HitCountItem{
@@ -348,23 +333,4 @@ func makeRequest(svc *dynamodb.DynamoDB, whenAt string, items *[]HitCountItem, c
 	ch <- true
 
 	return // items
-}
-
-func oldMain() {
-	var record HitCountQueryResult
-
-	dec := json.NewDecoder(os.Stdin)
-	for {
-		err := dec.Decode(&record)
-		if err == io.EOF {
-			return
-		}
-		if err != nil {
-			log.Fatal(err)
-
-		}
-
-		printReport(record.Items)
-
-	}
 }
