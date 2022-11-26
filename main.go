@@ -48,7 +48,7 @@ func int10(s string) int64 {
 	return a
 }
 
-func printReport(items []HitCountItem) {
+func printReport(items []HitCountItem) string {
 	sum := 0
 	uncounted := 0
 	distinctUncounts := 0
@@ -62,7 +62,7 @@ func printReport(items []HitCountItem) {
 		}
 		return items[i].AsOfWhen.S < items[j].AsOfWhen.S
 	})
-	fmt.Printf("%45s\t%10s\t%4s\t%5s\t%5s\n",
+	str := fmt.Sprintf("%45s\t%10s\t%4s\t%5s\t%5s\n",
 		"Post", "Last Hit", "Hits", "Accum", "Total")
 
 	for index := range items {
@@ -73,7 +73,7 @@ func printReport(items []HitCountItem) {
 			num := int10(items[index].TodayCount.N)
 			sum += int(num)
 
-			fmt.Printf("%45s\t%10s\t%4d\t%5d\t%5d\n",
+			str += fmt.Sprintf("%45s\t%10s\t%4d\t%5d\t%5d\n",
 				url, items[index].LastHit.S[11:19], num, sum,
 				int10(items[index].AccumCount.N))
 		} else {
@@ -83,6 +83,8 @@ func printReport(items []HitCountItem) {
 			continue
 		}
 	}
+
+	return str
 }
 
 func generateDates() chan string {
@@ -182,27 +184,33 @@ func computeSummaryStats(items []HitCountItem) SummaryStats {
 
 type futureStatsString chan string
 
-func getStatsString(AsOfWhen string, svc *dynamodb.DynamoDB) futureStatsString {
-	ch := make(chan string)
+func getStatsString(AsOfWhen string, svc *dynamodb.DynamoDB, fullReport bool) futureStatsString {
+	ch := make(futureStatsString)
 
 	go func() {
-		var old_items []HitCountItem
+		var items []HitCountItem
 
 		ch2 := make(chan bool)
-		go makeRequest(svc, AsOfWhen, &old_items, ch2)
+		go makeRequest(svc, AsOfWhen, &items, ch2)
 		<-ch2
 		close(ch2)
 
 		// printReport(old_items)
-		stats := computeSummaryStats(old_items)
+		stats := computeSummaryStats(items)
 
-		retStr := fmt.Sprintf("%s Posts(Views/Distinct): %3d / %3d + Other(Views/Distinct): %3d / %3d  = %4d \n",
+		var retStr string
+		if fullReport {
+			retStr = printReport(items)
+		}
+
+		retStr += fmt.Sprintf("%s Posts(Views/Distinct): %3d / %3d + Others: %3d / %3d  = %4d \n",
 			AsOfWhen,
 			stats.PostHits, stats.DistinctPosts,
 			stats.NotPostViews, stats.NotPosts,
 			stats.TotalViews)
 
 		ch <- retStr
+		close(ch)
 	}()
 
 	return ch
@@ -226,24 +234,17 @@ func main() {
 	})
 	svc := dynamodb.New(s)
 
-	ch := make(chan bool)
-	var items []HitCountItem
-	go makeRequest(svc, nowStr, &items, ch)
-
 	var futures []futureStatsString
 
-	futures = append(futures, getStatsString(nowStr, svc))
+	futures = append(futures, getStatsString(nowStr, svc, true))
 
-	N := 3
+	N := 7
 
 	for i := 1; i <= N; i++ {
 		yesterdayStr := now.AddDate(0, 0, -i).Format(YYYYMMDD)
-		futures = append(futures, getStatsString(yesterdayStr, svc))
+		futures = append(futures, getStatsString(yesterdayStr, svc, false))
 	}
 
-	// Print the actual report
-	<-ch
-	printReport(items)
 	for _, item := range futures {
 		s := <-item
 		fmt.Print(s)
