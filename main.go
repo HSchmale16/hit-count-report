@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"flag"
 	"fmt"
 	"io/ioutil"
 	"log"
@@ -21,6 +22,8 @@ import (
 const (
 	YYYYMMDD = "2006-01-02"
 )
+
+type futureStatsString chan string
 
 type StringItem struct {
 	S string
@@ -48,7 +51,7 @@ func int10(s string) int64 {
 	return a
 }
 
-func printReport(items []HitCountItem) string {
+func printReport(items []HitCountItem, results futureStatsString) {
 	sum := 0
 	uncounted := 0
 	distinctUncounts := 0
@@ -62,7 +65,7 @@ func printReport(items []HitCountItem) string {
 		}
 		return items[i].AsOfWhen.S < items[j].AsOfWhen.S
 	})
-	str := fmt.Sprintf("%45s\t%10s\t%4s\t%5s\t%5s\n",
+	results <- fmt.Sprintf("%45s\t%10s\t%4s\t%5s\t%5s\n",
 		"Post", "Last Hit", "Hits", "Accum", "Total")
 
 	for index := range items {
@@ -73,7 +76,7 @@ func printReport(items []HitCountItem) string {
 			num := int10(items[index].TodayCount.N)
 			sum += int(num)
 
-			str += fmt.Sprintf("%45s\t%10s\t%4d\t%5d\t%5d\n",
+			results <- fmt.Sprintf("%45s\t%10s\t%4d\t%5d\t%5d\n",
 				url, items[index].LastHit.S[11:19], num, sum,
 				int10(items[index].AccumCount.N))
 		} else {
@@ -83,8 +86,6 @@ func printReport(items []HitCountItem) string {
 			continue
 		}
 	}
-
-	return str
 }
 
 func generateDates() chan string {
@@ -182,8 +183,6 @@ func computeSummaryStats(items []HitCountItem) SummaryStats {
 	return stats
 }
 
-type futureStatsString chan string
-
 func getStatsString(AsOfWhen string, svc *dynamodb.DynamoDB, fullReport bool) futureStatsString {
 	ch := make(futureStatsString)
 
@@ -195,21 +194,18 @@ func getStatsString(AsOfWhen string, svc *dynamodb.DynamoDB, fullReport bool) fu
 		<-ch2
 		close(ch2)
 
-		// printReport(old_items)
 		stats := computeSummaryStats(items)
 
-		var retStr string
 		if fullReport {
-			retStr = printReport(items)
+			printReport(items, ch)
 		}
 
-		retStr += fmt.Sprintf("%s Posts(Views/Distinct): %3d / %3d + Others: %3d / %3d  = %4d \n",
+		ch <- fmt.Sprintf("%s Posts(Views/Distinct): %3d / %3d + Others: %3d / %3d  = %4d \n",
 			AsOfWhen,
 			stats.PostHits, stats.DistinctPosts,
 			stats.NotPostViews, stats.NotPosts,
 			stats.TotalViews)
 
-		ch <- retStr
 		close(ch)
 	}()
 
@@ -225,9 +221,23 @@ func main() {
 		pprof.StartCPUProfile(pprofFile)
 		defer pprof.StopCPUProfile()
 	*/
-
 	now := time.Now().UTC()
-	nowStr := now.Format(YYYYMMDD)
+	var nowStr string
+
+	var N int
+
+	flag.StringVar(&nowStr, "targetDate", now.Format(YYYYMMDD), "Target date to start printing as expanded")
+	flag.IntVar(&N, "numDays", 7, "Number of days to print out details of")
+
+	flag.Parse()
+
+	if nowStr != now.Format(YYYYMMDD) {
+		newNow, err := time.Parse(YYYYMMDD, nowStr)
+		if err != nil {
+			log.Fatal("Bad date format", err)
+		}
+		now = newNow
+	}
 
 	s := session.New(&aws.Config{
 		Region: aws.String("us-east-1"),
@@ -238,16 +248,15 @@ func main() {
 
 	futures = append(futures, getStatsString(nowStr, svc, true))
 
-	N := 7
-
 	for i := 1; i <= N; i++ {
 		yesterdayStr := now.AddDate(0, 0, -i).Format(YYYYMMDD)
 		futures = append(futures, getStatsString(yesterdayStr, svc, false))
 	}
 
 	for _, item := range futures {
-		s := <-item
-		fmt.Print(s)
+		for line := range item {
+			fmt.Print(line)
+		}
 	}
 
 }
