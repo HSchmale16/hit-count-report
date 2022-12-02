@@ -1,16 +1,14 @@
 package main
 
 import (
-	"context"
-	"encoding/json"
 	"flag"
 	"fmt"
-	"io/ioutil"
 	"log"
+	"os"
+	"runtime/pprof"
 	"sort"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/aws/aws-sdk-go/aws"
@@ -44,6 +42,14 @@ type HitCountItem struct {
 
 type HitCountQueryResult struct {
 	Items []HitCountItem
+}
+
+type SummaryStats struct {
+	DistinctPosts int64
+	PostHits      int64
+	NotPosts      int64
+	NotPostViews  int64
+	TotalViews    int64
 }
 
 func int10(s string) int64 {
@@ -86,78 +92,6 @@ func printReport(items []HitCountItem, results futureStatsString) {
 			continue
 		}
 	}
-}
-
-func generateDates() chan string {
-	channel := make(chan string, 2)
-	go func() {
-		for i := 0; i < 60; i++ {
-			dt := time.Now()
-			when := dt.AddDate(0, 0, -i)
-			whenStr := when.Format(YYYYMMDD)
-			channel <- whenStr
-		}
-		close(channel)
-	}()
-
-	return channel
-}
-
-func parallelScan() {
-	s := session.New(&aws.Config{
-		Region: aws.String("us-east-1"),
-	})
-	svc := dynamodb.New(s)
-
-	totalCap := 0
-
-	ctx := context.Background()
-
-	var wg sync.WaitGroup
-	totalWorkers := int64(7)
-
-	for i := int64(0); i < totalWorkers; i++ {
-		wg.Add(1)
-		go func(i, total int64) {
-			err := svc.ScanPagesWithContext(ctx,
-				&dynamodb.ScanInput{
-					TableName: aws.String("hit_counts"),
-					//IndexName:              aws.String("as_of_when-the_url-index-2"),
-					ReturnConsumedCapacity: aws.String("TOTAL"),
-					Segment:                aws.Int64(i),
-					TotalSegments:          aws.Int64(total),
-					//Limit:                  aws.Int64(256),
-				},
-				func(page *dynamodb.ScanOutput, lastpage bool) bool {
-					//fmt.Println(page)
-
-					totalCap += int(*page.ConsumedCapacity.CapacityUnits)
-
-					if lastpage {
-						fmt.Println(totalCap)
-					}
-
-					return true
-				},
-			)
-
-			if err != nil {
-				log.Fatal(err)
-			}
-
-			wg.Done()
-		}(i, int64(totalWorkers))
-	}
-
-	wg.Wait()
-}
-
-type SummaryStats struct {
-	DistinctPosts int64
-	PostHits      int64
-	NotPosts      int64
-	NotPostViews  int64
-	TotalViews    int64
 }
 
 func computeSummaryStats(items []HitCountItem) SummaryStats {
@@ -213,14 +147,13 @@ func getStatsString(AsOfWhen string, svc *dynamodb.DynamoDB, fullReport bool) fu
 }
 
 func main() {
-	/*
-		pprofFile, pprofErr := os.Create("cpu.pprof")
-		if pprofErr != nil {
-			log.Fatal(pprofErr)
-		}
-		pprof.StartCPUProfile(pprofFile)
-		defer pprof.StopCPUProfile()
-	*/
+	pprofFile, pprofErr := os.Create("cpu.pprof")
+	if pprofErr != nil {
+		log.Fatal(pprofErr)
+	}
+	pprof.StartCPUProfile(pprofFile)
+	defer pprof.StopCPUProfile()
+	//*/
 	now := time.Now().UTC()
 	var nowStr string
 
@@ -261,25 +194,6 @@ func main() {
 
 }
 
-func loadDynamodbFile(items *[]HitCountItem, ch chan bool) {
-	content, err := ioutil.ReadFile("./stuff.json")
-	if err != nil {
-		log.Fatal("Failed to open: ", err)
-	}
-
-	var payload HitCountQueryResult
-	err = json.Unmarshal(content, &payload)
-	if err != nil {
-		log.Fatal("Failed to unmarshall: ", err)
-	}
-
-	*items = payload.Items
-
-	fmt.Println("LOADED")
-	ch <- true
-	fmt.Println("Posted back")
-}
-
 func makeRequest(svc *dynamodb.DynamoDB, whenAt string, items *[]HitCountItem, ch chan bool) {
 
 	input := &dynamodb.QueryInput{
@@ -316,8 +230,19 @@ func makeRequest(svc *dynamodb.DynamoDB, whenAt string, items *[]HitCountItem, c
 		return // make([]HitCountItem, 0)
 	}
 
+	//log.Fatal(result.Items)
+
 	for index := range result.Items {
 		item := result.Items[index]
+
+		var lastHit string
+		lastHitPtr := item["last_hit_at"]
+		if lastHitPtr == nil {
+			lastHit = ""
+		} else {
+			lastHit = *lastHitPtr.S
+		}
+
 		thing := HitCountItem{
 			AsOfWhen: StringItem{
 				S: *item["as_of_when"].S,
@@ -329,7 +254,7 @@ func makeRequest(svc *dynamodb.DynamoDB, whenAt string, items *[]HitCountItem, c
 				N: *item["today_count"].N,
 			},
 			LastHit: StringItem{
-				S: *item["last_hit_at"].S,
+				S: lastHit,
 			},
 			AccumCount: NumberItem{
 				N: *item["accumulated_count"].N,
