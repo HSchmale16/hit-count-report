@@ -74,7 +74,7 @@ func printReport(items []HitCountItem, results futureStatsString) {
 		if a != b {
 			return a > b
 		}
-		return items[i].AsOfWhen.S < items[j].AsOfWhen.S
+		return items[i].LastHit.S[11:19] > items[j].LastHit.S[11:19]
 	})
 
 	// we're going to check all the users for a post and see if they show up greater than once in the collection.
@@ -85,8 +85,8 @@ func printReport(items []HitCountItem, results futureStatsString) {
 		}
 	}
 
-	results <- fmt.Sprintf("%45s\t%10s\t%4s\t%5s\t%5s\n",
-		"Post", "Last Hit", "Hits", "Accum", "Total")
+	results <- fmt.Sprintf("%45s  %10s  %4s  %5s\n",
+		"Post", "Last Hit", "Hits", "Total")
 
 	for index, item := range items {
 		url := items[index].Url.S
@@ -104,8 +104,8 @@ func printReport(items []HitCountItem, results futureStatsString) {
 			num := int10(items[index].TodayCount.N)
 			sum += int(num)
 
-			results <- fmt.Sprintf("%45s\t%10s\t%4d\t%5d\t%5d\n",
-				url, items[index].LastHit.S[11:19], num, sum,
+			results <- fmt.Sprintf("%45s  %10s  %4d  %5d\n",
+				url, items[index].LastHit.S[11:19], num,
 				int10(items[index].AccumCount.N))
 		} else {
 			num := int10(items[index].TodayCount.N)
