@@ -9,6 +9,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/aws/aws-sdk-go/aws"
@@ -21,6 +22,8 @@ const (
 	YYYYMMDD = "2006-01-02"
 )
 
+var requestUnits int64
+
 type futureStatsString chan string
 
 type StringItem struct {
@@ -32,12 +35,13 @@ type NumberItem struct {
 }
 
 type HitCountItem struct {
-	TodayCount NumberItem `json:"today_count"`
-	AccumCount NumberItem `json:"accumulated_count"`
-	AsOfWhen   StringItem
-	Url        StringItem `json:"the_url"`
-	LastHit    StringItem `json:"last_hit_at"`
-	Delta      int        // delta from last position
+	TodayCount   NumberItem `json:"today_count"`
+	AccumCount   NumberItem `json:"accumulated_count"`
+	AsOfWhen     StringItem
+	Url          StringItem `json:"the_url"`
+	LastHit      StringItem `json:"last_hit_at"`
+	UserIdHashes []*string
+	Delta        int // delta from last position
 }
 
 type HitCountQueryResult struct {
@@ -45,11 +49,12 @@ type HitCountQueryResult struct {
 }
 
 type SummaryStats struct {
-	DistinctPosts int64
-	PostHits      int64
-	NotPosts      int64
-	NotPostViews  int64
-	TotalViews    int64
+	DistinctPosts    int64
+	PostHits         int64
+	NotPosts         int64
+	NotPostViews     int64
+	TotalViews       int64
+	NumDistinctUsers int
 }
 
 func int10(s string) int64 {
@@ -71,13 +76,30 @@ func printReport(items []HitCountItem, results futureStatsString) {
 		}
 		return items[i].AsOfWhen.S < items[j].AsOfWhen.S
 	})
+
+	// we're going to check all the users for a post and see if they show up greater than once in the collection.
+	users := make(map[string]int)
+	for _, item := range items {
+		for _, user := range item.UserIdHashes {
+			users[*user] += 1
+		}
+	}
+
 	results <- fmt.Sprintf("%45s\t%10s\t%4s\t%5s\t%5s\n",
 		"Post", "Last Hit", "Hits", "Accum", "Total")
 
-	for index := range items {
+	for index, item := range items {
 		url := items[index].Url.S
 		if strings.HasSuffix(url, ".html") && strings.HasPrefix(url, "/20") {
 			url = url[1 : len(url)-5]
+
+			// If the same user has visited at least one other page today mark it as such
+			for _, user := range item.UserIdHashes {
+				if users[*user] > 1 {
+					url = "(*) " + url
+					break
+				}
+			}
 
 			num := int10(items[index].TodayCount.N)
 			sum += int(num)
@@ -97,8 +119,14 @@ func printReport(items []HitCountItem, results futureStatsString) {
 func computeSummaryStats(items []HitCountItem) SummaryStats {
 	stats := SummaryStats{}
 
+	users := make(map[string]int8)
+
 	for index, value := range items {
 		url := items[index].Url.S
+
+		for _, user := range value.UserIdHashes {
+			users[*user] += 1
+		}
 
 		if strings.HasSuffix(url, ".html") && strings.HasPrefix(url, "/20") {
 			stats.PostHits += int10(value.TodayCount.N)
@@ -114,11 +142,13 @@ func computeSummaryStats(items []HitCountItem) SummaryStats {
 		stats.TotalViews += int10(value.TodayCount.N)
 	}
 
+	stats.NumDistinctUsers = len(users)
+
 	return stats
 }
 
 func getStatsString(AsOfWhen string, svc *dynamodb.DynamoDB, fullReport bool) futureStatsString {
-	ch := make(futureStatsString)
+	ch := make(futureStatsString, 5)
 
 	go func() {
 		var items []HitCountItem
@@ -134,11 +164,13 @@ func getStatsString(AsOfWhen string, svc *dynamodb.DynamoDB, fullReport bool) fu
 			printReport(items, ch)
 		}
 
-		ch <- fmt.Sprintf("%s Posts(Views/Distinct): %3d / %3d + Others: %3d / %3d  = %4d \n",
+		ch <- fmt.Sprintf("%s Posts(Tv/Cnt): %3d/%3d + Others: %3d/%3d = %4d(u=%d)\n",
 			AsOfWhen,
 			stats.PostHits, stats.DistinctPosts,
 			stats.NotPostViews, stats.NotPosts,
-			stats.TotalViews)
+			stats.TotalViews,
+			stats.NumDistinctUsers,
+		)
 
 		close(ch)
 	}()
@@ -147,6 +179,7 @@ func getStatsString(AsOfWhen string, svc *dynamodb.DynamoDB, fullReport bool) fu
 }
 
 func main() {
+
 	pprofFile, pprofErr := os.Create("cpu.pprof")
 	if pprofErr != nil {
 		log.Fatal(pprofErr)
@@ -192,6 +225,8 @@ func main() {
 		}
 	}
 
+	fmt.Printf("Total Capacity Units = %.1f\n", float64(requestUnits)*(1./2.))
+
 }
 
 func makeRequest(svc *dynamodb.DynamoDB, whenAt string, items *[]HitCountItem, ch chan bool) {
@@ -204,7 +239,8 @@ func makeRequest(svc *dynamodb.DynamoDB, whenAt string, items *[]HitCountItem, c
 		},
 		KeyConditionExpression: aws.String("as_of_when = :v1"),
 		TableName:              aws.String("hit_counts"),
-		IndexName:              aws.String("as_of_when-the_url-index-2"),
+		IndexName:              aws.String("as_of_when-index"),
+		ReturnConsumedCapacity: aws.String("TOTAL"),
 	}
 
 	result, err := svc.Query(input)
@@ -229,6 +265,9 @@ func makeRequest(svc *dynamodb.DynamoDB, whenAt string, items *[]HitCountItem, c
 		}
 		return // make([]HitCountItem, 0)
 	}
+
+	atomic.AddInt64(&requestUnits, int64(*result.ConsumedCapacity.CapacityUnits*2))
+	// result.ConsumedCapacity.CapacityUnits
 
 	//log.Fatal(result.Items)
 
@@ -259,6 +298,7 @@ func makeRequest(svc *dynamodb.DynamoDB, whenAt string, items *[]HitCountItem, c
 			AccumCount: NumberItem{
 				N: *item["accumulated_count"].N,
 			},
+			UserIdHashes: (*item["user_id_hashes"]).SS,
 		}
 
 		*items = append(*items, thing)
