@@ -24,27 +24,27 @@ const (
 var requestUnits int64
 
 func main() {
-	/*
-		pprofFile, pprofErr := os.Create("cpu.pprof")
-		if pprofErr != nil {
-			log.Fatal(pprofErr)
-		}
-		pprof.StartCPUProfile(pprofFile)
-		defer pprof.StopCPUProfile()
-		//*/
+/*
+	pprofFile, pprofErr := os.Create("cpu.pprof")
+	if pprofErr != nil {
+		log.Fatal(pprofErr)
+	}
+	pprof.StartCPUProfile(pprofFile)
+	defer pprof.StopCPUProfile()
+	//*/
 	now := time.Now().UTC()
 	var nowStr string
 
 	var numDays int
 	var shouldExport bool
 
-	flag.BoolVar(&shouldExport, "shouldExport", false, "Should export database to s3")
+	flag.BoolVar(&shouldExport, "s3export", false, "Should export database to s3")
 	flag.StringVar(&nowStr, "targetDate", now.Format(YYYYMMDD), "Target date to start printing as expanded")
 	flag.IntVar(&numDays, "numDays", 7, "Number of days to print out details of")
 
 	flag.Parse()
 
-	fmt.Print(shouldExport)
+	//fmt.Print(shouldExport)
 
 	if nowStr != now.Format(YYYYMMDD) {
 		newNow, err := time.Parse(YYYYMMDD, nowStr)
@@ -63,11 +63,16 @@ func main() {
 
 	if shouldExport {
 		go handleExports(svc, numDays, now, doneChan)
+	} else {
+		go func() {
+			doneChan <- true
+		}()
 	}
 
 	generateReport(svc, now, numDays)
 
 	<-doneChan
+	fmt.Printf("Total Capacity Units = %.1f\n", float64(requestUnits)*(1./2.))
 }
 
 func generateReport(svc *dynamodb.DynamoDB, now time.Time, N int) {
@@ -86,8 +91,6 @@ func generateReport(svc *dynamodb.DynamoDB, now time.Time, N int) {
 			fmt.Print(line)
 		}
 	}
-
-	fmt.Printf("Total Capacity Units = %.1f\n", float64(requestUnits)*(1./2.))
 
 }
 

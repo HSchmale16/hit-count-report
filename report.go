@@ -19,11 +19,11 @@ type NumberItem struct {
 type HitCountItem struct {
 	TodayCount   NumberItem `json:"today_count"`
 	AccumCount   NumberItem `json:"accumulated_count"`
-	AsOfWhen     StringItem
+	AsOfWhen     StringItem `json:"as_of_when"`
 	Url          StringItem `json:"the_url"`
 	LastHit      StringItem `json:"last_hit_at"`
-	UserIdHashes []*string
-	Delta        int // delta from last position
+	UserIdHashes []*string  `json:"user_id_hashes"`
+	Delta        int        // delta from last position
 }
 
 type futureStatsString chan string

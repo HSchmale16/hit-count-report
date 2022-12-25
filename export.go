@@ -8,6 +8,7 @@ import (
 	"bytes"
 	"compress/gzip"
 	"encoding/json"
+	"fmt"
 	"log"
 	"sync"
 	"time"
@@ -47,32 +48,48 @@ func handleExports(dSvc *dynamodb.DynamoDB, numDays int, startTime time.Time, do
 		go handleExportForDay(ts, s3svc, dSvc, &wg)
 		//futures = append(futures, getStatsString(yesterdayStr, svc, false))
 	}
+	fmt.Println("Starting wait")
 	wg.Wait()
+	fmt.Println("Done waiting")
 
 	doneChan <- true
 }
 
 func handleExportForDay(ts time.Time, s3svc *s3.S3, svcDynamodb *dynamodb.DynamoDB, wg *sync.WaitGroup) {
-	yesterdayStr := ts.Format(YYYYMMDD)
-	objName := ts.Format(UPLOAD_OBJECT_FORMAT) + ".json.gz"
+	defer wg.Done()
+
+	targetDateStr := ts.Format(YYYYMMDD)
+	objName := ts.Format(UPLOAD_OBJECT_FORMAT) + ".json"
 
 	ch := make(chan bool)
 	var items []HitCountItem
-	go makeRequest(svcDynamodb, yesterdayStr, &items, ch)
+	go makeRequest(svcDynamodb, targetDateStr, &items, ch)
 	<-ch
 
-	result, err := json.Marshal(items)
-	if err != nil {
-		log.Fatal(err)
+	if len(items) == 0 {
+		fmt.Println("Skipping ", targetDateStr)
+		return
 	}
 
-	result, err = gzipBytes(result)
-	if err != nil {
-		log.Fatal("Failed to gzip data before upload")
+	var data []byte
+	for _, item := range items {
+		result, err := json.Marshal(item)
+		if err != nil {
+			log.Fatal(err)
+		}
+		data = append(data, result...)
+		data = append(data, byte('\n'))
 	}
 
-	_, err = s3svc.PutObject(&s3.PutObjectInput{
-		Body:   bytes.NewReader(result),
+	/*
+		result, err := gzipBytes(data)
+		if err != nil {
+			log.Fatal("Failed to gzip data before upload")
+		}
+	*/
+
+	_, err := s3svc.PutObject(&s3.PutObjectInput{
+		Body:   bytes.NewReader(data),
 		Bucket: aws.String(UPLOAD_BUCKET),
 		Key:    aws.String(objName),
 	})
@@ -80,9 +97,6 @@ func handleExportForDay(ts time.Time, s3svc *s3.S3, svcDynamodb *dynamodb.Dynamo
 	if err != nil {
 		log.Fatal(err)
 	}
-	//fmt.Println(result)
-
-	wg.Done()
 }
 
 func gzipBytes(src []byte) ([]byte, error) {
