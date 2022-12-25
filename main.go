@@ -4,8 +4,8 @@ import (
 	"flag"
 	"fmt"
 	"log"
-	"os"
-	"runtime/pprof"
+//	"os"
+//	"runtime/pprof"
 	"sort"
 	"strconv"
 	"strings"
@@ -164,7 +164,7 @@ func getStatsString(AsOfWhen string, svc *dynamodb.DynamoDB, fullReport bool) fu
 			printReport(items, ch)
 		}
 
-		ch <- fmt.Sprintf("%s Posts(Tv/Cnt): %3d/%3d + Others: %3d/%3d = %4d(u=%d)\n",
+		ch <- fmt.Sprintf("\t%s Posts(Tv/Cnt): %3d/%3d + Others: %3d/%3d = %4d(u=%d)\n",
 			AsOfWhen,
 			stats.PostHits, stats.DistinctPosts,
 			stats.NotPostViews, stats.NotPosts,
@@ -179,7 +179,7 @@ func getStatsString(AsOfWhen string, svc *dynamodb.DynamoDB, fullReport bool) fu
 }
 
 func main() {
-
+	/*
 	pprofFile, pprofErr := os.Create("cpu.pprof")
 	if pprofErr != nil {
 		log.Fatal(pprofErr)
