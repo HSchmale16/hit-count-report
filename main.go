@@ -15,6 +15,7 @@ import (
 	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/dynamodb"
+	"github.com/aws/aws-sdk-go/service/s3"
 )
 
 const (
@@ -24,14 +25,14 @@ const (
 var requestUnits int64
 
 func main() {
-/*
-	pprofFile, pprofErr := os.Create("cpu.pprof")
-	if pprofErr != nil {
-		log.Fatal(pprofErr)
-	}
-	pprof.StartCPUProfile(pprofFile)
-	defer pprof.StopCPUProfile()
-	//*/
+	/*
+		pprofFile, pprofErr := os.Create("cpu.pprof")
+		if pprofErr != nil {
+			log.Fatal(pprofErr)
+		}
+		pprof.StartCPUProfile(pprofFile)
+		defer pprof.StopCPUProfile()
+		//*/
 	now := time.Now().UTC()
 	var nowStr string
 
@@ -57,33 +58,24 @@ func main() {
 	s := session.New(&aws.Config{
 		Region: aws.String("us-east-1"),
 	})
-	svc := dynamodb.New(s)
 
-	doneChan := make(exportComplete)
+	generateReport(s, now, numDays, shouldExport)
 
-	if shouldExport {
-		go handleExports(svc, numDays, now, doneChan)
-	} else {
-		go func() {
-			doneChan <- true
-		}()
-	}
-
-	generateReport(svc, now, numDays)
-
-	<-doneChan
 	fmt.Printf("Total Capacity Units = %.1f\n", float64(requestUnits)*(1./2.))
 }
 
-func generateReport(svc *dynamodb.DynamoDB, now time.Time, N int) {
+func generateReport(session *session.Session, now time.Time, N int, shouldExport bool) {
 	var futures []futureStatsString
 
+	dSvc := dynamodb.New(session)
+	s3svc := s3.New(session)
+
 	nowStr := now.Format(YYYYMMDD)
-	futures = append(futures, getStatsString(nowStr, svc, true))
+	futures = append(futures, getStatsString(nowStr, dSvc, s3svc, true, shouldExport))
 
 	for i := 1; i <= N; i++ {
 		yesterdayStr := now.AddDate(0, 0, -i).Format(YYYYMMDD)
-		futures = append(futures, getStatsString(yesterdayStr, svc, false))
+		futures = append(futures, getStatsString(yesterdayStr, dSvc, s3svc, false, shouldExport))
 	}
 
 	for _, item := range futures {

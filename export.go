@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"strings"
 	"sync"
 	"time"
 
@@ -42,11 +43,11 @@ func handleExports(dSvc *dynamodb.DynamoDB, numDays int, startTime time.Time, do
 	s3svc := s3.New(s3session)
 
 	var wg sync.WaitGroup
-	for i := 1; i <= numDays; i++ {
+	for i := 0; i <= numDays; i++ {
 		wg.Add(1)
 		ts := startTime.AddDate(0, 0, -i)
+		fmt.Println(ts)
 		go handleExportForDay(ts, s3svc, dSvc, &wg)
-		//futures = append(futures, getStatsString(yesterdayStr, svc, false))
 	}
 	fmt.Println("Starting wait")
 	wg.Wait()
@@ -55,11 +56,46 @@ func handleExports(dSvc *dynamodb.DynamoDB, numDays int, startTime time.Time, do
 	doneChan <- true
 }
 
+func exportItemsToS3(as_of_when string, items []HitCountItem, s3svc *s3.S3) {
+	itemName := strings.ReplaceAll(as_of_when, "-", "/")
+	itemName += ".json.gz"
+
+	if len(items) == 0 {
+		fmt.Println("Skipping ", as_of_when)
+		return
+	}
+
+	var data []byte
+	for _, item := range items {
+		result, err := json.Marshal(item)
+		if err != nil {
+			log.Fatal(err)
+		}
+		data = append(data, result...)
+		data = append(data, byte('\n'))
+	}
+
+	result, err := gzipBytes(data)
+	if err != nil {
+		log.Fatal("Failed to gzip data before upload")
+	}
+
+	_, err = s3svc.PutObject(&s3.PutObjectInput{
+		Body:   bytes.NewReader(result),
+		Bucket: aws.String(UPLOAD_BUCKET),
+		Key:    aws.String(itemName),
+	})
+
+	if err != nil {
+		log.Fatal(err)
+	}
+}
+
 func handleExportForDay(ts time.Time, s3svc *s3.S3, svcDynamodb *dynamodb.DynamoDB, wg *sync.WaitGroup) {
 	defer wg.Done()
 
 	targetDateStr := ts.Format(YYYYMMDD)
-	objName := ts.Format(UPLOAD_OBJECT_FORMAT) + ".json"
+	objName := ts.Format(UPLOAD_OBJECT_FORMAT) + ".json.gz"
 
 	ch := make(chan bool)
 	var items []HitCountItem
@@ -81,15 +117,14 @@ func handleExportForDay(ts time.Time, s3svc *s3.S3, svcDynamodb *dynamodb.Dynamo
 		data = append(data, byte('\n'))
 	}
 
-	/*
-		result, err := gzipBytes(data)
-		if err != nil {
-			log.Fatal("Failed to gzip data before upload")
-		}
-	*/
+	result, err := gzipBytes(data)
+	if err != nil {
+		log.Fatal("Failed to gzip data before upload")
+	}
+	//*/
 
-	_, err := s3svc.PutObject(&s3.PutObjectInput{
-		Body:   bytes.NewReader(data),
+	_, err = s3svc.PutObject(&s3.PutObjectInput{
+		Body:   bytes.NewReader(result),
 		Bucket: aws.String(UPLOAD_BUCKET),
 		Key:    aws.String(objName),
 	})

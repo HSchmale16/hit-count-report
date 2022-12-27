@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/aws/aws-sdk-go/service/dynamodb"
+	"github.com/aws/aws-sdk-go/service/s3"
 )
 
 type StringItem struct {
@@ -23,7 +24,6 @@ type HitCountItem struct {
 	Url          StringItem `json:"the_url"`
 	LastHit      StringItem `json:"last_hit_at"`
 	UserIdHashes []*string  `json:"user_id_hashes"`
-	Delta        int        // delta from last position
 }
 
 type futureStatsString chan string
@@ -126,7 +126,10 @@ func computeSummaryStats(items []HitCountItem) SummaryStats {
 	return stats
 }
 
-func getStatsString(AsOfWhen string, svc *dynamodb.DynamoDB, fullReport bool) futureStatsString {
+/* getStatsString
+ * Handles loading and making a pretty print report.
+ */
+func getStatsString(AsOfWhen string, svc *dynamodb.DynamoDB, s3svc *s3.S3, fullReport bool, shouldExport bool) futureStatsString {
 	ch := make(futureStatsString, 5)
 
 	go func() {
@@ -136,6 +139,10 @@ func getStatsString(AsOfWhen string, svc *dynamodb.DynamoDB, fullReport bool) fu
 		go makeRequest(svc, AsOfWhen, &items, ch2)
 		<-ch2
 		close(ch2)
+
+		if shouldExport {
+			exportItemsToS3(AsOfWhen, items, s3svc)
+		}
 
 		stats := computeSummaryStats(items)
 
