@@ -41,7 +41,7 @@ func main() {
 
 	flag.BoolVar(&shouldExport, "s3export", false, "Should export database to s3")
 	flag.StringVar(&nowStr, "targetDate", now.Format(YYYYMMDD), "Target date to start printing as expanded")
-	flag.IntVar(&numDays, "numDays", 7, "Number of days to print out details of")
+	flag.IntVar(&numDays, "numDays", 3, "Number of days to print out details of")
 
 	flag.Parse()
 
