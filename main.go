@@ -38,9 +38,11 @@ func main() {
 
 	var numDays int
 	var shouldExport bool
+	var showAllPages bool
 
 	flag.BoolVar(&shouldExport, "s3export", false, "Should export database to s3")
 	flag.StringVar(&nowStr, "targetDate", now.Format(YYYYMMDD), "Target date to start printing as expanded")
+	flag.BoolVar(&showAllPages, "allPosts", false, "Should show all pages instead of just posts as defined by date and html")
 	flag.IntVar(&numDays, "numDays", 3, "Number of days to print out details of")
 
 	flag.Parse()
@@ -59,27 +61,27 @@ func main() {
 		Region: aws.String("us-east-1"),
 	})
 
-	generateReport(s, now, numDays, shouldExport)
+	generateReport(s, now, numDays, shouldExport, showAllPages)
 
 	fmt.Printf("Total Capacity Units = %.1f\n", float64(requestUnits)*(1./2.))
 }
 
-func generateReport(session *session.Session, now time.Time, N int, shouldExport bool) {
+func generateReport(session *session.Session, now time.Time, N int, shouldExport, showAllPages bool) {
 	var futures []futureStatsString
 
 	dSvc := dynamodb.New(session)
 	s3svc := s3.New(session)
 
 	nowStr := now.Format(YYYYMMDD)
-	futures = append(futures, getStatsString(nowStr, dSvc, s3svc, true, shouldExport))
+	futures = append(futures, getStatsString(nowStr, dSvc, s3svc, true, shouldExport, showAllPages))
 
 	for i := 1; i <= N; i++ {
 		yesterdayStr := now.AddDate(0, 0, -i).Format(YYYYMMDD)
-		futures = append(futures, getStatsString(yesterdayStr, dSvc, s3svc, false, shouldExport))
+		futures = append(futures, getStatsString(yesterdayStr, dSvc, s3svc, false, shouldExport, showAllPages))
 	}
 
-	for _, item := range futures {
-		for line := range item {
+	for _, future := range futures {
+		for line := range future {
 			fmt.Print(line)
 		}
 	}

@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/aws/aws-sdk-go/service/dynamodb"
@@ -41,8 +42,7 @@ type SummaryStats struct {
 	NumDistinctUsers int
 }
 
-func printReport(items []HitCountItem, results futureStatsString) {
-	sum := 0
+func printReport(items []HitCountItem, results futureStatsString, showAllViews bool) {
 	uncounted := 0
 	distinctUncounts := 0
 
@@ -64,35 +64,49 @@ func printReport(items []HitCountItem, results futureStatsString) {
 		}
 	}
 
-	results <- fmt.Sprintf("%45s  %10s  %4s  %5s\n",
+	results <- fmt.Sprintf("%50s  %10s  %4s  %5s\n",
 		"Post", "Last Hit", "Hits", "Total")
 
+	tagsViewedCount := 0
 	for index, item := range items {
 		url := items[index].Url.S
+		if strings.HasPrefix(url, "/tag/") {
+			tagsViewedCount += 1
+		}
 		if strings.HasSuffix(url, ".html") && strings.HasPrefix(url, "/20") {
 			url = url[1 : len(url)-5]
 
 			// If the same user has visited at least one other page today mark it as such
+			numUserViewedPost := 0
 			for _, user := range item.UserIdHashes {
 				if users[*user] > 1 {
-					url = "(*) " + url
-					break
+					numUserViewedPost += 1
 				}
 			}
 
-			num := int10(items[index].TodayCount.N)
-			sum += int(num)
+			if numUserViewedPost > 0 {
+				numStr := strconv.Itoa(numUserViewedPost)
+				url = "(" + numStr + ") " + url
+			}
 
-			results <- fmt.Sprintf("%45s  %10s  %4d  %5d\n",
+			num := int10(items[index].TodayCount.N)
+
+			results <- fmt.Sprintf("%50s  %10s  %4d  %5d\n",
 				url, items[index].LastHit.S[11:19], num,
 				int10(items[index].AccumCount.N))
 		} else {
 			num := int10(items[index].TodayCount.N)
 			uncounted += int(num)
 			distinctUncounts++
-			continue
+
+			if showAllViews {
+				results <- fmt.Sprintf("%50s  %10s  %4d  %5d\n",
+					url, items[index].LastHit.S[11:19], num,
+					int10(items[index].AccumCount.N))
+			}
 		}
 	}
+	results <- fmt.Sprintf("Tags Viewed: %d\n", tagsViewedCount)
 }
 
 func computeSummaryStats(items []HitCountItem) SummaryStats {
@@ -129,7 +143,7 @@ func computeSummaryStats(items []HitCountItem) SummaryStats {
 /* getStatsString
  * Handles loading and making a pretty print report.
  */
-func getStatsString(AsOfWhen string, svc *dynamodb.DynamoDB, s3svc *s3.S3, fullReport bool, shouldExport bool) futureStatsString {
+func getStatsString(AsOfWhen string, svc *dynamodb.DynamoDB, s3svc *s3.S3, fullReport, shouldExport, showAllPages bool) futureStatsString {
 	ch := make(futureStatsString, 5)
 
 	go func() {
@@ -147,7 +161,7 @@ func getStatsString(AsOfWhen string, svc *dynamodb.DynamoDB, s3svc *s3.S3, fullR
 		stats := computeSummaryStats(items)
 
 		if fullReport {
-			printReport(items, ch)
+			printReport(items, ch, showAllPages)
 		}
 
 		ch <- fmt.Sprintf("\t%s Posts(Tv/Cnt): %3d/%3d + Others: %3d/%3d = %4d(u=%d)\n",
