@@ -122,6 +122,7 @@ func makeRequest(svc *dynamodb.DynamoDB, whenAt string, items *[]HitCountItem, c
 			// Message from an error.
 			fmt.Println(err.Error())
 		}
+		ch <- false
 		return // make([]HitCountItem, 0)
 	}
 

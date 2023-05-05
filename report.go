@@ -106,7 +106,9 @@ func printReport(items []HitCountItem, results futureStatsString, showAllViews b
 			}
 		}
 	}
-	results <- fmt.Sprintf("Tags Viewed: %d\n", tagsViewedCount)
+	if tagsViewedCount > 0 {
+		results <- fmt.Sprintf("Tags Viewed: %d\n", tagsViewedCount)
+	}
 }
 
 func computeSummaryStats(items []HitCountItem) SummaryStats {
@@ -151,8 +153,14 @@ func getStatsString(AsOfWhen string, svc *dynamodb.DynamoDB, s3svc *s3.S3, fullR
 
 		ch2 := make(chan bool)
 		go makeRequest(svc, AsOfWhen, &items, ch2)
-		<-ch2
+		result := <-ch2
 		close(ch2)
+
+		if ! result {
+			ch <- fmt.Sprintf("Failed to make request for %s\n", AsOfWhen)
+			close(ch)
+			return
+		}
 
 		if shouldExport {
 			exportItemsToS3(AsOfWhen, items, s3svc)
