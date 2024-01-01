@@ -73,6 +73,8 @@ func printReport(items []HitCountItem, results futureStatsString, showAllViews b
 		if strings.HasPrefix(url, "/tag/") {
 			tagsViewedCount += 1
 		}
+		// Require the proper suffix for posts.
+		// All posts end with .html
 		if strings.HasSuffix(url, ".html") && strings.HasPrefix(url, "/20") {
 			url = url[1 : len(url)-5]
 
@@ -99,7 +101,9 @@ func printReport(items []HitCountItem, results futureStatsString, showAllViews b
 			uncounted += int(num)
 			distinctUncounts++
 
-			if showAllViews {
+			// This is where we accept the flag to show things besides posts
+			// We exclude `-dev` things for my local environment.
+			if showAllViews && !strings.HasSuffix(url, "-dev") {
 				results <- fmt.Sprintf("%50s  %10s  %4d  %5d\n",
 					url, items[index].LastHit.S[11:19], num,
 					int10(items[index].AccumCount.N))

@@ -41,8 +41,9 @@ func main() {
 	var showAllPages bool
 
 	flag.BoolVar(&shouldExport, "s3export", false, "Should export database to s3")
-	flag.StringVar(&nowStr, "targetDate", now.Format(YYYYMMDD), "Target date to start printing as expanded")
-	flag.BoolVar(&showAllPages, "allPosts", false, "Should show all pages instead of just posts as defined by date and html")
+	flag.StringVar(&nowStr, "startDate", now.Format(YYYYMMDD), "Target date to start printing as expanded")
+	flag.BoolVar(&showAllPages, "all", false,
+		"Should show all pages instead of just posts as defined by beginning with date and html")
 	flag.IntVar(&numDays, "numDays", 3, "Number of days to print out details of")
 
 	flag.Parse()
@@ -100,6 +101,7 @@ func makeRequest(svc *dynamodb.DynamoDB, whenAt string, items *[]HitCountItem, c
 		TableName:              aws.String("hit_counts"),
 		IndexName:              aws.String("as_of_when-index"),
 		ReturnConsumedCapacity: aws.String("TOTAL"),
+		Limit:                  aws.Int64(100),
 	}
 
 	result, err := svc.Query(input)
@@ -125,6 +127,7 @@ func makeRequest(svc *dynamodb.DynamoDB, whenAt string, items *[]HitCountItem, c
 		ch <- false
 		return // make([]HitCountItem, 0)
 	}
+
 
 	atomic.AddInt64(&requestUnits, int64(*result.ConsumedCapacity.CapacityUnits*2))
 	// result.ConsumedCapacity.CapacityUnits
