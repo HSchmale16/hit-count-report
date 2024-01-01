@@ -42,6 +42,28 @@ type SummaryStats struct {
 	NumDistinctUsers int
 }
 
+func addUserSummaryStatToUrl(item HitCountItem, users map[string]int, isPost bool) string {
+	url := item.Url.S
+	if isPost {
+		url = url[1 : len(url)-5]
+	}
+
+	// If the same user has visited at least one other page today mark it as such
+	numUserViewedPost := 0
+	for _, user := range item.UserIdHashes {
+		if users[*user] > 1 {
+			numUserViewedPost += 1
+		}
+	}
+
+	if numUserViewedPost > 0 {
+		numStr := strconv.Itoa(numUserViewedPost)
+		url = "(" + numStr + ") " + url
+	}
+
+	return url
+}
+
 func printReport(items []HitCountItem, results futureStatsString, showAllViews bool) {
 	uncounted := 0
 	distinctUncounts := 0
@@ -76,20 +98,7 @@ func printReport(items []HitCountItem, results futureStatsString, showAllViews b
 		// Require the proper suffix for posts.
 		// All posts end with .html
 		if strings.HasSuffix(url, ".html") && strings.HasPrefix(url, "/20") {
-			url = url[1 : len(url)-5]
-
-			// If the same user has visited at least one other page today mark it as such
-			numUserViewedPost := 0
-			for _, user := range item.UserIdHashes {
-				if users[*user] > 1 {
-					numUserViewedPost += 1
-				}
-			}
-
-			if numUserViewedPost > 0 {
-				numStr := strconv.Itoa(numUserViewedPost)
-				url = "(" + numStr + ") " + url
-			}
+			url = addUserSummaryStatToUrl(item, users, true)
 
 			num := int10(items[index].TodayCount.N)
 
@@ -104,6 +113,8 @@ func printReport(items []HitCountItem, results futureStatsString, showAllViews b
 			// This is where we accept the flag to show things besides posts
 			// We exclude `-dev` things for my local environment.
 			if showAllViews && !strings.HasSuffix(url, "-dev") {
+				url = addUserSummaryStatToUrl(item, users, false)
+
 				results <- fmt.Sprintf("%50s  %10s  %4d  %5d\n",
 					url, items[index].LastHit.S[11:19], num,
 					int10(items[index].AccumCount.N))
@@ -147,7 +158,7 @@ func computeSummaryStats(items []HitCountItem) SummaryStats {
 }
 
 /* getStatsString
- * Handles loading and making a pretty print report.
+* Handles loading and making a pretty print report.
  */
 func getStatsString(AsOfWhen string, svc *dynamodb.DynamoDB, s3svc *s3.S3, fullReport, shouldExport, showAllPages bool) futureStatsString {
 	ch := make(futureStatsString, 5)
@@ -160,7 +171,7 @@ func getStatsString(AsOfWhen string, svc *dynamodb.DynamoDB, s3svc *s3.S3, fullR
 		result := <-ch2
 		close(ch2)
 
-		if ! result {
+		if !result {
 			ch <- fmt.Sprintf("Failed to make request for %s\n", AsOfWhen)
 			close(ch)
 			return
